@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = [
+    "contracts/vepdex",
+    "contracts/incentives",
+]
+
+[profile.release]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+panic = 'abort'
+incremental = false
+overflow-checks = true
+
+[workspace.dependencies]
+cosmwasm-schema = "2.2.2"
+cosmwasm-std = { version = "2.2.2", features = ["cosmwasm_1_1"]}
+cw-storage-plus = "2.0.0"
+cw2 = "2.0.0"
+cw-utils = "2.0.0"
+cw20 = "2.0.0"
+schemars = "0.8.22"
+serde = { version = "1.0.219", default-features = false, features = ["derive"] }
+thiserror = { version = "1.0.69" }
+cw-multi-test = "2.4.0"
+

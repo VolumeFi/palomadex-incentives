@@ -1,0 +1,2 @@
+pub const MAX_REWARD_TOKENS: u8 = 5;
+pub const MAX_PROPOSAL_TTL: u64 = 1209600;
