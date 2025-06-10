@@ -22,7 +22,6 @@ pub fn instantiate(
 ) -> Result<Response<PalomaMsg>, ContractError> {
     let config = Config {
         lock_denom: msg.lock_denom,
-        owner: msg.owner,
     };
 
     CONFIG.save(deps.storage, &config)?;
@@ -407,7 +406,6 @@ pub mod query {
     pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
         let config = CONFIG.load(deps.storage)?;
         Ok(ConfigResponse {
-            owner: config.owner.to_string(),
             lock_denom: config.lock_denom,
         })
     }

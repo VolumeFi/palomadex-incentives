@@ -45,7 +45,6 @@ pub enum QueryMsg {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 pub struct ConfigResponse {
-    pub owner: String,
     pub lock_denom: String,
 }
 
