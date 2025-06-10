@@ -732,7 +732,7 @@ pub fn token_asset_info(contract_addr: Addr) -> AssetInfo {
 /// - this function relies on the fact that chain doesn't allow to mint native tokens in the form of bech32 addresses.
 ///   For example, if it is allowed to mint native token `wasm1xxxxxxx` then [`AssetInfo`] will be determined incorrectly;
 /// - if you intend to test this functionality in cw-multi-test you must implement [`Api`] trait for your test App
-/// with conjunction with [AddressGenerator](https://docs.rs/cw-multi-test/0.17.0/cw_multi_test/trait.AddressGenerator.html)
+///   with conjunction with [AddressGenerator](https://docs.rs/cw-multi-test/0.17.0/cw_multi_test/trait.AddressGenerator.html)
 pub fn determine_asset_info(maybe_asset_info: &str, api: &dyn Api) -> StdResult<AssetInfo> {
     if api.addr_validate(maybe_asset_info).is_ok() {
         Ok(AssetInfo::Token {
@@ -835,7 +835,7 @@ impl Decimal256Ext for Decimal256 {
             .checked_div(10u128.pow(self.decimal_places() - precision).into())?
             .try_into()
             .map_err(|_: ConversionOverflowError| {
-                StdError::generic_err(format!("Error conversion overflow"))
+                StdError::generic_err("Error conversion overflow")
             })
     }
 
