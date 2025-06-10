@@ -1,35 +1,35 @@
 use cosmwasm_std::{
-    attr, ensure, wasm_execute, Addr, Api, BankMsg, CustomQuery, Deps, DepsMut, Env, MessageInfo, Order, QuerierWrapper, ReplyOn, Response, StdError, StdResult, Storage, SubMsg, Uint128
+    attr, ensure, wasm_execute, Addr, BankMsg, CosmosMsg, CustomQuery, Deps, DepsMut, Env,
+    MessageInfo, Order, QuerierWrapper, ReplyOn, Response, StdError, StdResult, Storage, SubMsg,
+    Uint128,
 };
 use cw_storage_plus::Item;
 use itertools::Itertools;
 
-use palomadex::asset::{
-    pair_info_by_pool, AssetInfo, AssetInfoExt, CoinsExt, PairInfo,
+use crate::asset::{
+    determine_asset_info, pair_info_by_pool, AssetInfo, AssetInfoExt, CoinsExt, PairInfo,
 };
-use palomadex::factory::PairType;
-use palomadex::incentives::{Config, IncentivesSchedule, InputSchedule, MAX_ORPHANED_REWARD_LIMIT};
-use palomadex::{factory, pair, vesting};
-
-use crate::constants::MAX_PROPOSAL_TTL;
+use crate::constants::{MAX_ORPHANED_REWARD_LIMIT, MAX_PROPOSAL_TTL};
 use crate::error::ContractError;
+use crate::msg::FactoryQueryMsg;
 use crate::reply::POST_TRANSFER_REPLY_ID;
 use crate::state::{
     Op, PoolInfo, UserInfo, ACTIVE_POOLS, BLOCKED_TOKENS, CONFIG, ORPHANED_REWARDS,
 };
-use crate::types::OwnershipProposal;
+use crate::types::{
+    Config, IncentivesSchedule, InputSchedule, MintMsg, OwnershipProposal, PairQueryMsg, PairType,
+    PalomaMsg,
+};
 
 /// Claim all rewards and compose [`Response`] object containing all attributes and messages.
 /// This function doesn't mutate the state but mutates in-memory objects.
 /// Function caller is responsible for updating the state.
-/// If vesting_contract is None this function reads config from state and gets vesting address.
 pub fn claim_rewards(
     storage: &dyn Storage,
-    vesting_contract: Option<Addr>,
     env: Env,
     user: &Addr,
     pool_tuples: Vec<(&AssetInfo, &mut PoolInfo, &mut UserInfo)>,
-) -> Result<Response, ContractError> {
+) -> Result<Response<PalomaMsg>, ContractError> {
     let mut attrs = vec![attr("action", "claim_rewards"), attr("user", user)];
     let mut external_rewards = vec![];
     let mut protocol_reward_amount = Uint128::zero();
@@ -69,7 +69,7 @@ pub fn claim_rewards(
     // This allows to reduce number of output messages thus reducing total gas cost.
     let mut messages = external_rewards
         .into_iter()
-        .group_by(|asset| asset.info.clone())
+        .chunk_by(|asset| asset.info.clone())
         .into_iter()
         .map(|(info, assets)| {
             let amount: Uint128 = assets.into_iter().map(|asset| asset.amount).sum();
@@ -80,19 +80,22 @@ pub fn claim_rewards(
 
     // Claim Palomadex rewards
     if !protocol_reward_amount.is_zero() {
-        let vesting_contract = if let Some(vesting_contract) = vesting_contract {
-            vesting_contract
-        } else {
-            CONFIG.load(storage)?.vesting_contract
+        let pdex = CONFIG.load(storage)?.pdex_token;
+
+        let pdex = match pdex {
+            AssetInfo::NativeToken { denom } => denom,
+            AssetInfo::Token { contract_addr: _ } => {
+                return Err(ContractError::PDEXNotNativeCoin {});
+            }
         };
-        messages.push(SubMsg::new(wasm_execute(
-            vesting_contract,
-            &vesting::ExecuteMsg::Claim {
-                recipient: Some(user.to_string()),
-                amount: Some(protocol_reward_amount),
-            },
-            vec![],
-        )?));
+        messages.push(SubMsg::new(CosmosMsg::Custom(PalomaMsg::TokenFactoryMsg {
+            create_denom: None,
+            mint_tokens: Some(MintMsg {
+                denom: pdex,
+                amount: protocol_reward_amount,
+                mint_to_address: user.to_string(),
+            }),
+        })))
     }
 
     Ok(Response::new()
@@ -107,7 +110,7 @@ pub fn deactivate_pool(
     info: MessageInfo,
     env: Env,
     lp_token: String,
-) -> Result<Response, ContractError> {
+) -> Result<Response<PalomaMsg>, ContractError> {
     let mut config = CONFIG.load(deps.storage)?;
 
     if info.sender != config.factory {
@@ -152,14 +155,17 @@ pub fn deactivate_pool(
 }
 
 /// Removes pools from active pools if their pair type is blocked.
-pub fn deactivate_blocked_pools(deps: DepsMut, env: Env) -> Result<Response, ContractError> {
+pub fn deactivate_blocked_pools(
+    deps: DepsMut,
+    env: Env,
+) -> Result<Response<PalomaMsg>, ContractError> {
     let mut response = Response::new();
     let mut active_pools = ACTIVE_POOLS.load(deps.storage)?;
     let mut config = CONFIG.load(deps.storage)?;
 
     let blocked_pair_types: Vec<PairType> = deps
         .querier
-        .query_wasm_smart(&config.factory, &factory::QueryMsg::BlacklistedPairTypes {})?;
+        .query_wasm_smart(&config.factory, &FactoryQueryMsg::BlacklistedPairTypes {})?;
 
     let mut to_remove = vec![];
 
@@ -208,7 +214,7 @@ pub fn incentivize(
     env: Env,
     lp_token: String,
     input: InputSchedule,
-) -> Result<Response, ContractError> {
+) -> Result<Response<PalomaMsg>, ContractError> {
     let schedule = IncentivesSchedule::from_input(&env, &input)?;
 
     let mut response = Response::new().add_attributes([
@@ -310,7 +316,7 @@ pub fn remove_reward_from_pool(
     reward: String,
     bypass_upcoming_schedules: bool,
     receiver: String,
-) -> Result<Response, ContractError> {
+) -> Result<Response<PalomaMsg>, ContractError> {
     let config = CONFIG.load(deps.storage)?;
     if info.sender != config.owner {
         return Err(ContractError::Unauthorized {});
@@ -360,7 +366,7 @@ pub fn query_pair_info(deps: Deps, lp_asset: &AssetInfo) -> StdResult<PairInfo> 
                 let lp_minter = parts[1];
                 deps.api.addr_validate(lp_minter)?;
                 deps.querier
-                    .query_wasm_smart(lp_minter, &pair::QueryMsg::Pair {})
+                    .query_wasm_smart(lp_minter, &PairQueryMsg::Pair {})
             } else {
                 Err(StdError::generic_err(format!(
                     "LP token {denom} doesn't follow token factory format: factory/{{lp_minter}}/{{token_name}}",
@@ -381,7 +387,7 @@ pub fn is_pool_registered(
     querier
         .query_wasm_smart::<PairInfo>(
             &config.factory,
-            &factory::QueryMsg::Pair {
+            &FactoryQueryMsg::Pair {
                 asset_infos: pair_info.asset_infos.to_vec(),
             },
         )
@@ -409,7 +415,7 @@ pub fn claim_orphaned_rewards(
     info: MessageInfo,
     limit: Option<u8>,
     receiver: String,
-) -> Result<Response, ContractError> {
+) -> Result<Response<PalomaMsg>, ContractError> {
     let config = CONFIG.load(deps.storage)?;
     ensure!(info.sender == config.owner, ContractError::Unauthorized {});
 
@@ -479,22 +485,6 @@ pub fn from_key_to_asset_info(bytes: Vec<u8>) -> StdResult<AssetInfo> {
         _ => Err(StdError::generic_err(
             "Failed to deserialize asset info key",
         )),
-    }
-}
-
-pub fn determine_asset_info(maybe_asset_info: &str, api: &dyn Api) -> StdResult<AssetInfo> {
-    if api.addr_validate(maybe_asset_info).is_ok() {
-        Ok(AssetInfo::Token {
-            contract_addr: Addr::unchecked(maybe_asset_info),
-        })
-    } else if validate_native_denom(maybe_asset_info).is_ok() {
-        Ok(AssetInfo::NativeToken {
-            denom: maybe_asset_info.to_string(),
-        })
-    } else {
-        Err(StdError::generic_err(format!(
-            "Cannot determine asset info from {maybe_asset_info}"
-        )))
     }
 }
 

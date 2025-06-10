@@ -5,14 +5,13 @@ use cosmwasm_std::{Addr, Decimal256, Env, Order, StdError, StdResult, Storage, U
 use cw_storage_plus::{Bound, Item, Map};
 use itertools::Itertools;
 
-use palomadex::asset::{Asset, AssetInfo, AssetInfoExt};
-use palomadex::common::OwnershipProposal;
-use palomadex::incentives::{Config, IncentivesSchedule};
-use palomadex::incentives::{PoolInfoResponse, RewardInfo, RewardType};
-use palomadex::incentives::{MAX_PAGE_LIMIT, MAX_REWARD_TOKENS};
-
+use crate::asset::{Asset, AssetInfo, AssetInfoExt};
+use crate::constants::{MAX_PAGE_LIMIT, MAX_REWARD_TOKENS};
 use crate::error::ContractError;
 use crate::traits::RewardInfoExt;
+use crate::types::{
+    Config, IncentivesSchedule, OwnershipProposal, PoolInfoResponse, RewardInfo, RewardType,
+};
 use crate::utils::asset_info_key;
 
 /// General generator contract settings
@@ -62,7 +61,7 @@ impl RewardInfoExt for RewardInfo {
         // rewards from past schedules.
         // Outstanding rewards from finished schedules are handled in claim_finished_rewards().
         // To account current active period properly we need to consider user index as 0.
-        let user_amount = Uint256::from(user_info.amount);
+        let user_amount = Decimal256::from_ratio(Uint256::from(user_info.amount), 1u8);
         let u256_result = match user_index_opt {
             Some((_, user_reward_index)) if *user_reward_index > self.index => {
                 self.index * user_amount
@@ -70,8 +69,9 @@ impl RewardInfoExt for RewardInfo {
             None => self.index * user_amount,
             Some((_, user_reward_index)) => (self.index - *user_reward_index) * user_amount,
         };
+        let uint256_result = u256_result.to_uint_floor();
 
-        Ok(u256_result.try_into()?)
+        Ok(uint256_result.try_into()?)
     }
 }
 
@@ -441,7 +441,7 @@ impl PoolInfo {
             self.rewards_to_remove
                 .iter()
                 .map(|(reward, index)| (reward.asset_info().clone(), *index))
-                .group_by(|(_, (_, orphaned_amount))| orphaned_amount.is_zero())
+                .chunk_by(|(_, (_, orphaned_amount))| orphaned_amount.is_zero())
                 .into_iter()
                 .try_for_each(|(is_zero, group)| {
                     if is_zero {
@@ -654,12 +654,14 @@ impl UserInfo {
                                 })
                                 .unwrap_or_default();
 
-                            (finished_index - user_reward_index) * lp_tokens_amount
+                            (finished_index - user_reward_index)
+                                * Decimal256::from_ratio(lp_tokens_amount, 1u8)
                         } else {
                             // Subsequent finished schedules consider user never claimed rewards
                             // thus their index was 0
-                            finished_index * lp_tokens_amount
+                            finished_index * Decimal256::from_ratio(lp_tokens_amount, 1u8)
                         };
+                        let amount = amount.to_uint_floor();
 
                         Ok(reward_info.with_balance(Uint128::try_from(amount)?))
                     })

@@ -10,6 +10,6 @@ pub mod querier;
 pub mod query;
 pub mod reply;
 pub mod state;
-pub mod types;
 pub mod traits;
+pub mod types;
 pub mod utils;

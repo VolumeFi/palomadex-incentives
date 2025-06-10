@@ -69,4 +69,7 @@ pub enum ContractError {
 
     #[error("Failed to migrate contract")]
     MigrationError {},
+
+    #[error("PDEX is not native coin")]
+    PDEXNotNativeCoin {},
 }

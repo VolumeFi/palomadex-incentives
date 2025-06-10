@@ -1,10 +1,14 @@
-use cosmwasm_schema::cw_serde;
+use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::Uint128;
 use cw20::Cw20ReceiveMsg;
 
-use crate::types::{AssetInfo, IncentivizationFeeInfo, InputSchedule};
-
-
+use crate::{
+    asset::{Asset, AssetInfo, PairInfo},
+    types::{
+        Config, FeeInfoResponse, IncentivizationFeeInfo, InputSchedule, PairType, PairsResponse,
+        PoolInfoResponse, RewardInfo, ScheduleResponse,
+    },
+};
 
 #[cw_serde]
 pub enum ExecuteMsg {
@@ -76,10 +80,6 @@ pub enum ExecuteMsg {
     /// Update config.
     /// Only the owner can execute it.
     UpdateConfig {
-        /// The new PDEX token info
-        pdex_token: Option<AssetInfo>,
-        /// The new vesting contract address
-        vesting_contract: Option<String>,
         /// The new generator controller contract address
         generator_controller: Option<String>,
         /// The new generator guardian
@@ -119,4 +119,101 @@ pub enum ExecuteMsg {
     /// Claims contract ownership
     /// Only the newly proposed owner can execute this
     ClaimOwnership {},
+    SetBridge {
+        erc20_address: String,
+        chain_reference_id: String,
+    },
+}
+
+#[cw_serde]
+pub struct InstantiateMsg {
+    pub owner: String,
+    pub factory: String,
+    pub incentivization_fee_info: Option<IncentivizationFeeInfo>,
+    pub guardian: Option<String>,
+    pub pdex_name: String,
+    pub pdex_symbol: String,
+    pub pdex_description: Option<String>,
+}
+
+#[cw_serde]
+#[derive(QueryResponses)]
+pub enum QueryMsg {
+    /// Config returns the main contract parameters
+    #[returns(Config)]
+    Config {},
+    /// Deposit returns the LP token amount deposited in a specific generator
+    #[returns(Uint128)]
+    Deposit { lp_token: String, user: String },
+    /// PendingToken returns the amount of rewards that can be claimed by an account that deposited a specific LP token in a generator
+    #[returns(Vec<Asset>)]
+    PendingRewards { lp_token: String, user: String },
+    /// RewardInfo returns reward information for a specified LP token
+    #[returns(Vec<RewardInfo>)]
+    RewardInfo { lp_token: String },
+    /// PoolInfo returns information about a pool associated with the specified LP token
+    #[returns(PoolInfoResponse)]
+    PoolInfo { lp_token: String },
+    /// Returns a list of tuples with addresses and their staked amount
+    #[returns(Vec<(String, Uint128)>)]
+    PoolStakers {
+        lp_token: String,
+        start_after: Option<String>,
+        limit: Option<u8>,
+    },
+    /// Returns paginated list of blocked tokens
+    #[returns(Vec<AssetInfo>)]
+    BlockedTokensList {
+        start_after: Option<AssetInfo>,
+        limit: Option<u8>,
+    },
+    /// Checks whether fee expected for the specified pool if user wants to add new reward schedule
+    #[returns(bool)]
+    IsFeeExpected { lp_token: String, reward: String },
+    /// Returns the list of all external reward schedules for the specified LP token
+    #[returns(Vec<ScheduleResponse>)]
+    ExternalRewardSchedules {
+        /// Reward cw20 addr/denom
+        reward: String,
+        lp_token: String,
+        /// Start after specified timestamp
+        start_after: Option<u64>,
+        /// Limit number of returned schedules.
+        limit: Option<u8>,
+    },
+    #[returns(Vec<String>)]
+    /// Returns the list of all ever incentivized pools
+    ListPools {
+        /// Start after specified LP token
+        start_after: Option<String>,
+        /// Limit number of returned pools.
+        limit: Option<u8>,
+    },
+    #[returns(Vec<(String, Uint128)>)]
+    /// Returns the list of all pools receiving pdex emissions
+    ActivePools {},
+}
+
+#[cw_serde]
+#[derive(QueryResponses)]
+pub enum FactoryQueryMsg {
+    #[returns(Vec<PairType>)]
+    BlacklistedPairTypes {},
+    #[returns(FeeInfoResponse)]
+    FeeInfo {
+        /// The pair type for which we return fee information. Pair type is a [`PairType`] struct
+        pair_type: PairType,
+    },
+    #[returns(PairInfo)]
+    Pair {
+        /// The assets for which we return a pair
+        asset_infos: Vec<AssetInfo>,
+    },
+    #[returns(PairsResponse)]
+    Pairs {
+        /// The pair item to start reading from. It is an [`Option`] type that accepts [`AssetInfo`] elements.
+        start_after: Option<Vec<AssetInfo>>,
+        /// The number of pairs to read and return. It is an [`Option`] type.
+        limit: Option<u32>,
+    },
 }

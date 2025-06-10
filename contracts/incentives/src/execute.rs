@@ -3,21 +3,25 @@ use std::collections::HashSet;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    attr, ensure, from_json, Addr, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
-    Uint128,
+    attr, ensure, from_json, Addr, CosmosMsg, DepsMut, Env, MessageInfo, Response, StdError,
+    StdResult, Uint128,
 };
 use cw_utils::one_coin;
 use itertools::Itertools;
 
-use crate::asset::Asset;
+use crate::asset::{
+    addr_opt_validate, determine_asset_info, validate_native_denom, Asset, AssetInfo, AssetInfoExt,
+};
 use crate::error::ContractError;
-use crate::msg::ExecuteMsg;
+use crate::msg::{ExecuteMsg, FactoryQueryMsg};
 use crate::state::{
     Op, PoolInfo, UserInfo, ACTIVE_POOLS, BLOCKED_TOKENS, CONFIG, OWNERSHIP_PROPOSAL,
 };
-use crate::types::Cw20Msg;
+use crate::types::{Cw20Msg, IncentivizationFeeInfo, PairType, PalomaMsg, SetErc20ToDenom};
 use crate::utils::{
-    asset_info_key, claim_orphaned_rewards, claim_rewards, deactivate_blocked_pools, deactivate_pool, determine_asset_info, drop_ownership_proposal, incentivize, is_pool_registered, propose_new_owner, query_pair_info, remove_reward_from_pool
+    asset_info_key, claim_orphaned_rewards, claim_ownership, claim_rewards,
+    deactivate_blocked_pools, deactivate_pool, drop_ownership_proposal, incentivize,
+    is_pool_registered, propose_new_owner, query_pair_info, remove_reward_from_pool,
 };
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -26,7 +30,7 @@ pub fn execute(
     env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
-) -> Result<Response, ContractError> {
+) -> Result<Response<PalomaMsg>, ContractError> {
     match msg {
         ExecuteMsg::SetupPools { pools } => setup_pools(deps, env, info, pools),
         ExecuteMsg::ClaimRewards { lp_tokens } => {
@@ -54,7 +58,7 @@ pub fn execute(
                 .collect_vec();
 
             // Compose response. Return early in case of error
-            let response = claim_rewards(deps.storage, None, env, &info.sender, mut_tuples)?;
+            let response = claim_rewards(deps.storage, env, &info.sender, mut_tuples)?;
 
             // Save updates in state
             for (lp_asset, pool_info, user_pos) in tuples {
@@ -108,16 +112,12 @@ pub fn execute(
             claim_orphaned_rewards(deps, info, limit, receiver)
         }
         ExecuteMsg::UpdateConfig {
-            pdex_token,
-            vesting_contract,
             generator_controller,
             guardian,
             incentivization_fee_info,
         } => update_config(
             deps,
             info,
-            pdex_token,
-            vesting_contract,
             generator_controller,
             guardian,
             incentivization_fee_info,
@@ -158,6 +158,10 @@ pub fn execute(
             })
             .map_err(Into::into)
         }
+        ExecuteMsg::SetBridge {
+            erc20_address,
+            chain_reference_id,
+        } => set_bridge(deps, info, erc20_address, chain_reference_id),
     }
 }
 
@@ -167,7 +171,7 @@ fn deposit(
     maybe_lp: Asset,
     sender: Addr,
     recipient: Option<String>,
-) -> Result<Response, ContractError> {
+) -> Result<Response<PalomaMsg>, ContractError> {
     let staker = addr_opt_validate(deps.api, &recipient)?.unwrap_or(sender);
 
     let pair_info = query_pair_info(deps.as_ref(), &maybe_lp.info)?;
@@ -185,7 +189,6 @@ fn deposit(
 
     let response = claim_rewards(
         deps.storage,
-        Some(config.vesting_contract),
         env,
         &staker,
         vec![(&maybe_lp.info, &mut pool_info, &mut user_info)],
@@ -209,7 +212,7 @@ fn withdraw(
     info: MessageInfo,
     lp_token: String,
     amount: Uint128,
-) -> Result<Response, ContractError> {
+) -> Result<Response<PalomaMsg>, ContractError> {
     let lp_token_asset = determine_asset_info(&lp_token, deps.api)?;
 
     let mut user_info = UserInfo::load_position(deps.storage, &info.sender, &lp_token_asset)?;
@@ -224,7 +227,6 @@ fn withdraw(
 
         let response = claim_rewards(
             deps.storage,
-            None,
             env,
             &info.sender,
             vec![(&lp_token_asset, &mut pool_info, &mut user_info)],
@@ -254,7 +256,7 @@ pub fn setup_pools(
     env: Env,
     info: MessageInfo,
     pools: Vec<(String, Uint128)>,
-) -> Result<Response, ContractError> {
+) -> Result<Response<PalomaMsg>, ContractError> {
     let mut config = CONFIG.load(deps.storage)?;
     if info.sender != config.owner && Some(info.sender) != config.generator_controller {
         return Err(ContractError::Unauthorized {});
@@ -275,7 +277,7 @@ pub fn setup_pools(
 
     let blacklisted_pair_types: Vec<PairType> = deps
         .querier
-        .query_wasm_smart(&config.factory, &factory::QueryMsg::BlacklistedPairTypes {})?;
+        .query_wasm_smart(&config.factory, &FactoryQueryMsg::BlacklistedPairTypes {})?;
 
     let setup_pools = pools
         .into_iter()
@@ -334,7 +336,7 @@ fn set_tokens_per_second(
     env: Env,
     info: MessageInfo,
     amount: Uint128,
-) -> Result<Response, ContractError> {
+) -> Result<Response<PalomaMsg>, ContractError> {
     let mut config = CONFIG.load(deps.storage)?;
 
     // Permission check
@@ -367,12 +369,10 @@ fn set_tokens_per_second(
 fn update_config(
     deps: DepsMut,
     info: MessageInfo,
-    pdex_token: Option<AssetInfo>,
-    vesting_contract: Option<String>,
     generator_controller: Option<String>,
     guardian: Option<String>,
     incentivization_fee_info: Option<IncentivizationFeeInfo>,
-) -> Result<Response, ContractError> {
+) -> Result<Response<PalomaMsg>, ContractError> {
     let mut config = CONFIG.load(deps.storage)?;
 
     // Permission check
@@ -381,33 +381,6 @@ fn update_config(
     }
 
     let mut attrs = vec![attr("action", "update_config")];
-
-    if let Some(pdex_token) = pdex_token {
-        pdex_token.check(deps.api)?;
-        attrs.push(attr("new_pdex_token", pdex_token.to_string()));
-        config.pdex_token = pdex_token;
-
-        // Loop through all active pools and update pdex asset info
-        for (lp_token, _) in ACTIVE_POOLS.load(deps.storage)? {
-            let mut pool_info = PoolInfo::load(deps.storage, &lp_token)?;
-            let protocol_reward = pool_info
-                .rewards
-                .iter_mut()
-                .find(|r| !r.reward.is_external())
-                .ok_or_else(|| {
-                    StdError::generic_err(format!(
-                        "Protocol PDEX reward not found in active pool {lp_token}",
-                    ))
-                })?;
-            protocol_reward.reward = RewardType::Int(config.pdex_token.clone());
-            pool_info.save(deps.storage, &lp_token)?;
-        }
-    }
-
-    if let Some(vesting_contract) = vesting_contract {
-        config.vesting_contract = deps.api.addr_validate(&vesting_contract)?;
-        attrs.push(attr("new_vesting_contract", vesting_contract));
-    }
 
     if let Some(generator_controller) = generator_controller {
         config.generator_controller = Some(deps.api.addr_validate(&generator_controller)?);
@@ -442,7 +415,7 @@ fn update_blocked_pool_tokens(
     info: MessageInfo,
     add: Vec<AssetInfo>,
     remove: Vec<AssetInfo>,
-) -> Result<Response, ContractError> {
+) -> Result<Response<PalomaMsg>, ContractError> {
     let mut config = CONFIG.load(deps.storage)?;
 
     // Permission check
@@ -551,4 +524,28 @@ fn update_blocked_pool_tokens(
     CONFIG.save(deps.storage, &config)?;
 
     Ok(Response::new().add_attribute("action", "update_tokens_blocklist"))
+}
+
+fn set_bridge(
+    deps: DepsMut,
+    info: MessageInfo,
+    erc20_address: String,
+    chain_reference_id: String,
+) -> Result<Response<PalomaMsg>, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+
+    // Permission check
+    if info.sender != config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    Ok(Response::new()
+        .add_message(CosmosMsg::Custom(PalomaMsg::SkywayMsg {
+            set_erc20_to_denom: SetErc20ToDenom {
+                erc20_address,
+                token_denom: config.pdex_token.to_string(),
+                chain_reference_id,
+            },
+        }))
+        .add_attribute("action", "set_bridge"))
 }

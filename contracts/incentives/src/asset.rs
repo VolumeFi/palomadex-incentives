@@ -2,7 +2,9 @@ use std::fmt;
 
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    coin, coins, ensure, to_json_binary, wasm_execute, Addr, Api, BankMsg, Binary, Coin, ConversionOverflowError, CosmosMsg, CustomMsg, CustomQuery, Decimal256, Fraction, MessageInfo, QuerierWrapper, ReplyOn, StdError, StdResult, SubMsg, Uint128, Uint256, WasmMsg
+    coin, coins, ensure, to_json_binary, wasm_execute, Addr, Api, BankMsg, Binary, Coin,
+    ConversionOverflowError, CosmosMsg, CustomMsg, CustomQuery, Decimal256, Fraction, MessageInfo,
+    QuerierWrapper, ReplyOn, StdError, StdResult, SubMsg, Uint128, Uint256, WasmMsg,
 };
 use cw20::{Cw20Coin, Cw20CoinVerified, Cw20ExecuteMsg, Cw20QueryMsg, Denom, MinterResponse};
 use cw_asset::{Asset as CwAsset, AssetInfo as CwAssetInfo};
@@ -38,7 +40,7 @@ pub struct DecimalAsset {
 }
 
 impl DecimalAsset {
-    pub fn into_asset(self, precision: impl Into<u32> + Sized) -> StdResult<Asset> {
+    pub fn into_asset(self, precision: impl Into<u32>) -> StdResult<Asset> {
         Ok(Asset {
             info: self.info,
             amount: self.amount.to_uint(precision)?,
@@ -362,7 +364,7 @@ pub enum AssetInfo {
     NativeToken { denom: String },
 }
 
-impl<'a> PrimaryKey<'a> for &AssetInfo {
+impl PrimaryKey<'_> for &AssetInfo {
     type Prefix = ();
 
     type SubPrefix = ();
@@ -376,7 +378,7 @@ impl<'a> PrimaryKey<'a> for &AssetInfo {
     }
 }
 
-impl<'a> Prefixer<'a> for &AssetInfo {
+impl Prefixer<'_> for &AssetInfo {
     fn prefix(&self) -> Vec<Key> {
         vec![Key::Ref(self.as_bytes())]
     }
@@ -389,7 +391,7 @@ impl KeyDeserialize for &AssetInfo {
     fn from_vec(_value: Vec<u8>) -> StdResult<Self::Output> {
         unimplemented!("Due to lack of knowledge of enum variant in binary there is no way to determine correct AssetInfo")
     }
-    
+
     // TODO: determine this as PrimaryKey::key().len()
     const KEY_ELEMS: u16 = 1;
 }
@@ -514,11 +516,11 @@ impl AssetInfo {
     }
 
     /// Returns the number of decimals that a token has.
-    pub fn decimals<C>(&self, querier: &QuerierWrapper<C>, factory_addr: &Addr) -> StdResult<u8>
+    pub fn decimals<C>(&self, querier: &QuerierWrapper<C>) -> StdResult<u8>
     where
         C: CustomQuery,
     {
-        query_token_precision(querier, self, factory_addr)
+        query_token_precision(querier, self)
     }
 
     /// Returns **true** if the calling token is the same as the token specified in the input parameters.
@@ -638,7 +640,6 @@ impl PairInfo {
         &self,
         querier: &QuerierWrapper,
         contract_addr: impl Into<String>,
-        factory_addr: &Addr,
     ) -> StdResult<Vec<DecimalAsset>> {
         let contract_addr = contract_addr.into();
         self.asset_infos
@@ -648,7 +649,7 @@ impl PairInfo {
                     info: asset_info.clone(),
                     amount: Decimal256::from_atomics(
                         asset_info.query_pool(querier, &contract_addr)?,
-                        asset_info.decimals(querier, factory_addr)?.into(),
+                        asset_info.decimals(querier)?.into(),
                     )
                     .map_err(|_| StdError::generic_err("Decimal256RangeExceeded"))?,
                 })
@@ -729,7 +730,7 @@ pub fn token_asset_info(contract_addr: Addr) -> AssetInfo {
 ///
 /// **NOTE**
 /// - this function relies on the fact that chain doesn't allow to mint native tokens in the form of bech32 addresses.
-/// For example, if it is allowed to mint native token `wasm1xxxxxxx` then [`AssetInfo`] will be determined incorrectly;
+///   For example, if it is allowed to mint native token `wasm1xxxxxxx` then [`AssetInfo`] will be determined incorrectly;
 /// - if you intend to test this functionality in cw-multi-test you must implement [`Api`] trait for your test App
 /// with conjunction with [AddressGenerator](https://docs.rs/cw-multi-test/0.17.0/cw_multi_test/trait.AddressGenerator.html)
 pub fn determine_asset_info(maybe_asset_info: &str, api: &dyn Api) -> StdResult<AssetInfo> {
@@ -833,7 +834,7 @@ impl Decimal256Ext for Decimal256 {
         value
             .checked_div(10u128.pow(self.decimal_places() - precision).into())?
             .try_into()
-            .map_err(|o: ConversionOverflowError| {
+            .map_err(|_: ConversionOverflowError| {
                 StdError::generic_err(format!("Error conversion overflow"))
             })
     }

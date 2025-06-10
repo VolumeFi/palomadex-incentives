@@ -6,14 +6,15 @@ use cosmwasm_std::{
 use cw_storage_plus::Bound;
 use itertools::Itertools;
 
-use palomadex::asset::{determine_asset_info, Asset, AssetInfo, AssetInfoExt};
-use palomadex::incentives::{QueryMsg, RewardType, ScheduleResponse, MAX_PAGE_LIMIT};
-
+use crate::asset::{determine_asset_info, Asset, AssetInfo, AssetInfoExt};
+use crate::constants::MAX_PAGE_LIMIT;
 use crate::error::ContractError;
+use crate::msg::QueryMsg;
 use crate::state::{
     list_pool_stakers, PoolInfo, UserInfo, ACTIVE_POOLS, BLOCKED_TOKENS, CONFIG,
     EXTERNAL_REWARD_SCHEDULES, POOLS,
 };
+use crate::types::{RewardType, ScheduleResponse};
 use crate::utils::{asset_info_key, from_key_to_asset_info};
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -181,7 +182,7 @@ pub fn query_pending_rewards(
 
     let aggregated = outstanding_rewards
         .into_iter()
-        .group_by(|asset| asset.info.clone())
+        .chunk_by(|asset| asset.info.clone())
         .into_iter()
         .map(|(info, assets)| {
             let amount: Uint128 = assets.into_iter().map(|asset| asset.amount).sum();

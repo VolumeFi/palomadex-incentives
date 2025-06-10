@@ -1,8 +1,10 @@
 use crate::asset::{Asset, AssetInfo, PairInfo};
-use crate::factory::{
-    Config as FactoryConfig, FeeInfoResponse, PairType, PairsResponse, QueryMsg as FactoryQueryMsg,
+
+use crate::msg::FactoryQueryMsg;
+use crate::types::{
+    FactoryConfig, FeeInfoResponse, PairQueryMsg, PairType, PairsResponse,
+    ReverseSimulationResponse, SimulationResponse,
 };
-use crate::pair::{QueryMsg as PairQueryMsg, ReverseSimulationResponse, SimulationResponse};
 
 use cosmwasm_std::{
     from_json, Addr, AllBalanceResponse, BankQuery, Coin, CustomQuery, Decimal, QuerierWrapper,
@@ -31,6 +33,7 @@ where
 ///
 /// * **account_addr** address for which we query balances.
 pub fn query_all_balances(querier: &QuerierWrapper, account_addr: Addr) -> StdResult<Vec<Coin>> {
+    #[allow(deprecated)]
     let all_balances: AllBalanceResponse =
         querier.query(&QueryRequest::Bank(BankQuery::AllBalances {
             address: String::from(account_addr),
@@ -104,15 +107,12 @@ where
 pub fn query_token_precision<C>(
     querier: &QuerierWrapper<C>,
     asset_info: &AssetInfo,
-    factory_addr: &Addr,
 ) -> StdResult<u8>
 where
     C: CustomQuery,
 {
     Ok(match asset_info {
-        AssetInfo::NativeToken { denom } => {
-            6u8
-        }
+        AssetInfo::NativeToken { denom: _ } => 6u8,
         AssetInfo::Token { contract_addr } => {
             let res: TokenInfoResponse =
                 querier.query_wasm_smart(contract_addr, &Cw20QueryMsg::TokenInfo {})?;
