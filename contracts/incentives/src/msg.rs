@@ -2,6 +2,7 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::Uint128;
 use cw20::Cw20ReceiveMsg;
 
+#[allow(unused_imports)]
 use crate::{
     asset::{Asset, AssetInfo, PairInfo},
     types::{
@@ -82,8 +83,6 @@ pub enum ExecuteMsg {
     UpdateConfig {
         /// The new generator controller contract address
         generator_controller: Option<String>,
-        /// The new generator guardian
-        guardian: Option<String>,
         /// New incentivization fee info
         incentivization_fee_info: Option<IncentivizationFeeInfo>,
     },
@@ -130,7 +129,6 @@ pub struct InstantiateMsg {
     pub owner: String,
     pub factory: String,
     pub incentivization_fee_info: Option<IncentivizationFeeInfo>,
-    pub guardian: Option<String>,
     pub pdex_name: String,
     pub pdex_symbol: String,
     pub pdex_description: Option<String>,
