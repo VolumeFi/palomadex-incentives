@@ -2,7 +2,7 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{CosmosMsg, DepsMut, Env, MessageInfo, Response, Uint128};
 
-use crate::asset::{addr_opt_validate, validate_native_denom, AssetInfo};
+use crate::asset::{validate_native_denom, AssetInfo};
 use crate::error::ContractError;
 use crate::msg::InstantiateMsg;
 use crate::state::{ACTIVE_POOLS, CONFIG};
@@ -43,7 +43,6 @@ pub fn instantiate(
             pdex_token: pdex_token.clone(),
             pdex_per_second: Uint128::zero(),
             total_alloc_points: Uint128::zero(),
-            guardian: addr_opt_validate(deps.api, &msg.guardian)?,
             incentivization_fee_info: msg.incentivization_fee_info,
         },
     )?;

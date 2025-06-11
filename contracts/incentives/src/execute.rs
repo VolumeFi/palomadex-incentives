@@ -113,15 +113,8 @@ pub fn execute(
         }
         ExecuteMsg::UpdateConfig {
             generator_controller,
-            guardian,
             incentivization_fee_info,
-        } => update_config(
-            deps,
-            info,
-            generator_controller,
-            guardian,
-            incentivization_fee_info,
-        ),
+        } => update_config(deps, info, generator_controller, incentivization_fee_info),
         ExecuteMsg::UpdateBlockedTokenslist { add, remove } => {
             update_blocked_pool_tokens(deps, env, info, add, remove)
         }
@@ -370,7 +363,6 @@ fn update_config(
     deps: DepsMut,
     info: MessageInfo,
     generator_controller: Option<String>,
-    guardian: Option<String>,
     incentivization_fee_info: Option<IncentivizationFeeInfo>,
 ) -> Result<Response<PalomaMsg>, ContractError> {
     let mut config = CONFIG.load(deps.storage)?;
@@ -385,11 +377,6 @@ fn update_config(
     if let Some(generator_controller) = generator_controller {
         config.generator_controller = Some(deps.api.addr_validate(&generator_controller)?);
         attrs.push(attr("new_generator_controller", generator_controller));
-    }
-
-    if let Some(guardian) = guardian {
-        config.guardian = Some(deps.api.addr_validate(guardian.as_str())?);
-        attrs.push(attr("new_guardian", guardian));
     }
 
     if let Some(new_info) = incentivization_fee_info {
@@ -419,7 +406,7 @@ fn update_blocked_pool_tokens(
     let mut config = CONFIG.load(deps.storage)?;
 
     // Permission check
-    if info.sender != config.owner && Some(info.sender) != config.guardian {
+    if info.sender != config.owner {
         return Err(ContractError::Unauthorized {});
     }
 

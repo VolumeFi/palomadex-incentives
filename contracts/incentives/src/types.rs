@@ -159,8 +159,6 @@ pub struct Config {
     pub pdex_per_second: Uint128,
     /// Total allocation points. Must be the sum of all allocation points in all active generators
     pub total_alloc_points: Uint128,
-    /// The guardian address which can add or remove tokens from blacklist
-    pub guardian: Option<Addr>,
     /// Defines native fee along with fee receiver.
     /// Fee is paid on adding NEW external reward to a specific pool
     pub incentivization_fee_info: Option<IncentivizationFeeInfo>,
