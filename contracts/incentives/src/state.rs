@@ -19,7 +19,7 @@ pub const CONFIG: Item<Config> = Item::new("config");
 
 /// Contains a proposal to change contract ownership.
 pub const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_proposal");
-/// Pools which receive PDEX emissions
+/// Pools which receive PADEX emissions
 pub const ACTIVE_POOLS: Item<Vec<(AssetInfo, Uint128)>> = Item::new("active_pools");
 /// Prohibited tokens set. Key: binary representing [`AssetInfo`] converted with [`crate::utils::asset_info_key`].
 pub const BLOCKED_TOKENS: Map<&[u8], ()> = Map::new("blocked_tokens");
@@ -207,18 +207,18 @@ impl PoolInfo {
             .collect()
     }
 
-    /// Set pdex per second for this pool according to alloc points and general pdex per second value
-    pub fn set_pdex_rewards(&mut self, config: &Config, alloc_points: Uint128) {
-        if let Some(pdex_reward_info) = self.rewards.iter_mut().find(|r| !r.reward.is_external()) {
-            pdex_reward_info.rps = Decimal256::from_ratio(
-                config.pdex_per_second * alloc_points,
+    /// Set padex per second for this pool according to alloc points and general padex per second value
+    pub fn set_padex_rewards(&mut self, config: &Config, alloc_points: Uint128) {
+        if let Some(padex_reward_info) = self.rewards.iter_mut().find(|r| !r.reward.is_external()) {
+            padex_reward_info.rps = Decimal256::from_ratio(
+                config.padex_per_second * alloc_points,
                 config.total_alloc_points,
             );
         } else {
             self.rewards.push(RewardInfo {
-                reward: RewardType::Int(config.pdex_token.clone()),
+                reward: RewardType::Int(config.padex_token.clone()),
                 rps: Decimal256::from_ratio(
-                    config.pdex_per_second * alloc_points,
+                    config.padex_per_second * alloc_points,
                     config.total_alloc_points,
                 ),
                 index: Default::default(),
@@ -227,19 +227,19 @@ impl PoolInfo {
         }
     }
 
-    /// Check whether this pools receiving PDEX emissions
+    /// Check whether this pools receiving PADEX emissions
     pub fn is_active_pool(&self) -> bool {
         self.rewards
             .iter()
             .any(|r| !r.reward.is_external() && !r.rps.is_zero())
     }
 
-    /// This function disables PDEX rewards in a specific pool.
-    /// We must keep PDEX schedule even tho reward per second becomes zero
+    /// This function disables PADEX rewards in a specific pool.
+    /// We must keep PADEX schedule even tho reward per second becomes zero
     /// because users still should be able to claim outstanding rewards according to indexes.
-    pub fn disable_pdex_rewards(&mut self) {
-        if let Some(pdex_reward_info) = self.rewards.iter_mut().find(|r| !r.reward.is_external()) {
-            pdex_reward_info.rps = Decimal256::zero();
+    pub fn disable_padex_rewards(&mut self) {
+        if let Some(padex_reward_info) = self.rewards.iter_mut().find(|r| !r.reward.is_external()) {
+            padex_reward_info.rps = Decimal256::zero();
         }
     }
 

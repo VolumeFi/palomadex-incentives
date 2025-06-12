@@ -105,7 +105,7 @@ pub struct StakingResponse {
     /// The ASTRO denom
     pub deposit_amount: Uint128,
     /// The xASTRO denom
-    pub pdex_amount: Uint128,
+    pub padex_amount: Uint128,
 }
 
 impl CustomMsg for PalomaMsg {}

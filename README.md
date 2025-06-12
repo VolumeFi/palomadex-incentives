@@ -1,14 +1,14 @@
-# Palomadex VePDEX and Incentives contracts
+# Palomadex VePADEX and Incentives contracts
 
-# Palomadex VePDEX
+# Palomadex VePADEX
 
-The Voting Escrow contract for PDEX coin.
+The Voting Escrow contract for PADEX coin.
 
 ---
 
 ## InstantiateMsg
 
-Initializes the contract with the denom of the PDEX token.
+Initializes the contract with the denom of the PADEX token.
 
 ```json
 {
@@ -33,7 +33,7 @@ CW20 receive msg.
 ### `create_lock`
 
 
-Lock PDEX and get VePDEX with end lock timestamp.
+Lock PADEX and get VePADEX with end lock timestamp.
 ```json
 {
     "create_lock": {
@@ -45,7 +45,7 @@ Lock PDEX and get VePDEX with end lock timestamp.
 
 ### `increase_lock_amount`
 
-Lock more PDEX and get VePDEX.
+Lock more PADEX and get VePADEX.
 ```json
 {
     "increase_lock_amount": {
@@ -56,7 +56,7 @@ Lock more PDEX and get VePDEX.
 
 ### `withdraw`
 
-Withdraw locked PDEX
+Withdraw locked PADEX
 
 ```json
 {
@@ -71,7 +71,7 @@ All query messages are described below. A custom struct is defined for each quer
 
 ### `config`
 
-Returns the vesting token contract address (the PDEX token address).
+Returns the vesting token contract address (the PADEX token address).
 
 ```json
 {
@@ -84,7 +84,7 @@ Returns the vesting token contract address (the PDEX token address).
 
 The Palomadex Incentives contract allocates token rewards for various Paloma tokens or LP tokens and distributes them pro-rata to LP stakers.
 We support both cw20 and native Paloma tokens or LP tokens.
-One more improvement is that PDEX emissions are counted by seconds instead of blocks which makes more sense since Palomadex is multichain protocol.
+One more improvement is that PADEX emissions are counted by seconds instead of blocks which makes more sense since Palomadex is multichain protocol.
 
 
 ## Endpoints Description
@@ -93,11 +93,11 @@ Contract supports following execute endpoints:
 - `deposit` - stake Paloma tokens or LP tokens in the generator in order to receive rewards. Rewards are updated and withdrawn automatically. All pools registered the Palomadex factory are stakable. However, it doesn't mean that the pool is incentivized.
 - `withdraw` - withdraw part or all Paloma tokens or LP tokens from the generator. Rewards are updated and withdrawn automatically.
 - `claim_rewards` - update and withdraw all rewards associated with the Paloma tokens or LP tokens. This endpoint accepts multiple Paloma tokens or LP tokens.
-- `set_tokens_per_second` - set new number of PDEX emissions per second. Only owner can call this endpoint.
+- `set_tokens_per_second` - set new number of PADEX emissions per second. Only owner can call this endpoint.
 - `incentivize` - add new reward schedule to a specific pool. All overlapped schedules are thoroughly considered and summed up. This is permissonless endpoint. However, it requires to pay incentivization fee in case this reward is new.
 - `remove_reward_from_pool` - completely remove reward from pool. However, all accrued rewards will be considered at current point. This endpoint can be called only by owner. One must supply remaining rewards receiver address.
 - `update_config` - is meant to update general contract settings. Only owner can call this endpoint.
-- `update_blocked_tokens_list` - update list of tokens that are not allowed to be incentivized with PDEX as well as can't be used as external rewards. Only owner can call this endpoint.
+- `update_blocked_tokens_list` - update list of tokens that are not allowed to be incentivized with PADEX as well as can't be used as external rewards. Only owner can call this endpoint.
 - `deactivate_pool` - only factory can call this endpoint. Called from deregistration context in factory.
 - `propose_new_owner`, `drop_ownership_proposal`, `claim_ownership` - endpoints to change ownership. Only current owner can propose new owner or drop proposal and only proposed owner can claim ownership.
 
