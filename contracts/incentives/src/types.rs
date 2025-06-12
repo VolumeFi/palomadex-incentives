@@ -87,7 +87,7 @@ pub enum PairQueryMsg {
 /// This enum is a tiny wrapper over [`AssetInfo`] to differentiate between internal and external rewards.
 /// External rewards always have a next_update_ts field which is used to update reward per second (or disable them).
 pub enum RewardType {
-    /// Internal rewards aka PDEX emissions don't have next_update_ts field and they are paid out.
+    /// Internal rewards aka PADEX emissions don't have next_update_ts field and they are paid out.
     Int(AssetInfo),
     /// External rewards always have corresponding schedules. Reward is paid out from Generator contract balance.
     Ext {
@@ -153,10 +153,10 @@ pub struct Config {
     pub factory: Addr,
     /// Contract address which can only set active generators and their alloc points
     pub generator_controller: Option<Addr>,
-    /// [`AssetInfo`] of the PDEX token
-    pub pdex_token: AssetInfo,
-    /// Total amount of PDEX rewards per second
-    pub pdex_per_second: Uint128,
+    /// [`AssetInfo`] of the PADEX token
+    pub padex_token: AssetInfo,
+    /// Total amount of PADEX rewards per second
+    pub padex_per_second: Uint128,
     /// Total allocation points. Must be the sum of all allocation points in all active generators
     pub total_alloc_points: Uint128,
     /// Defines native fee along with fee receiver.

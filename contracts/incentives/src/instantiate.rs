@@ -27,10 +27,10 @@ pub fn instantiate(
         validate_native_denom(&fee_info.fee.denom)?;
     }
 
-    let subdenom = "pdex";
+    let subdenom = "padex";
     let denom_creator = env.contract.address.to_string();
     let denom = "factory/".to_string() + denom_creator.as_str() + "/" + subdenom;
-    let pdex_token: AssetInfo = AssetInfo::NativeToken {
+    let padex_token: AssetInfo = AssetInfo::NativeToken {
         denom: denom.clone(),
     };
 
@@ -40,8 +40,8 @@ pub fn instantiate(
             owner: deps.api.addr_validate(&msg.owner)?,
             factory: deps.api.addr_validate(&msg.factory)?,
             generator_controller: None,
-            pdex_token: pdex_token.clone(),
-            pdex_per_second: Uint128::zero(),
+            padex_token: padex_token.clone(),
+            padex_per_second: Uint128::zero(),
             total_alloc_points: Uint128::zero(),
             incentivization_fee_info: msg.incentivization_fee_info,
         },
@@ -49,7 +49,7 @@ pub fn instantiate(
     ACTIVE_POOLS.save(deps.storage, &vec![])?;
 
     let metadata: Metadata = Metadata {
-        description: msg.pdex_description.unwrap_or_default(),
+        description: msg.padex_description.unwrap_or_default(),
         denom_units: vec![
             DenomUnit {
                 denom: denom.clone(),
@@ -57,15 +57,15 @@ pub fn instantiate(
                 aliases: vec![],
             },
             DenomUnit {
-                denom: msg.pdex_symbol.clone(),
+                denom: msg.padex_symbol.clone(),
                 exponent: 6,
                 aliases: vec![],
             },
         ],
-        name: msg.pdex_name.clone(),
-        symbol: msg.pdex_symbol.clone(),
+        name: msg.padex_name.clone(),
+        symbol: msg.padex_symbol.clone(),
         base: denom.clone(),
-        display: msg.pdex_symbol,
+        display: msg.padex_symbol,
     };
 
     let messages = vec![CosmosMsg::Custom(PalomaMsg::TokenFactoryMsg {

@@ -36,10 +36,10 @@ pub enum ExecuteMsg {
         /// The amount to withdraw. Must not exceed total staked amount.
         amount: Uint128,
     },
-    /// Set a new amount of PDEX to distribute per seconds.
+    /// Set a new amount of PADEX to distribute per seconds.
     /// Only the owner can execute this.
     SetTokensPerSecond {
-        /// The new amount of PDEX to distribute per second
+        /// The new amount of PADEX to distribute per second
         amount: Uint128,
     },
     /// Incentivize a pool with external rewards. Rewards can be in either native or cw20 form.
@@ -88,7 +88,7 @@ pub enum ExecuteMsg {
     },
     /// Add or remove token to the block list.
     /// Only owner or guardian can execute this.
-    /// Pools which contain these tokens can't be incentivized with PDEX rewards.
+    /// Pools which contain these tokens can't be incentivized with PADEX rewards.
     /// Also blocked tokens can't be used as external reward.
     /// Current active pools with these tokens will be removed from active set.
     UpdateBlockedTokenslist {
@@ -129,9 +129,9 @@ pub struct InstantiateMsg {
     pub owner: String,
     pub factory: String,
     pub incentivization_fee_info: Option<IncentivizationFeeInfo>,
-    pub pdex_name: String,
-    pub pdex_symbol: String,
-    pub pdex_description: Option<String>,
+    pub padex_name: String,
+    pub padex_symbol: String,
+    pub padex_description: Option<String>,
 }
 
 #[cw_serde]
@@ -188,7 +188,7 @@ pub enum QueryMsg {
         limit: Option<u8>,
     },
     #[returns(Vec<(String, Uint128)>)]
-    /// Returns the list of all pools receiving pdex emissions
+    /// Returns the list of all pools receiving padex emissions
     ActivePools {},
 }
 

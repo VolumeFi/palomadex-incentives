@@ -80,18 +80,18 @@ pub fn claim_rewards(
 
     // Claim Palomadex rewards
     if !protocol_reward_amount.is_zero() {
-        let pdex = CONFIG.load(storage)?.pdex_token;
+        let padex = CONFIG.load(storage)?.padex_token;
 
-        let pdex = match pdex {
+        let padex = match padex {
             AssetInfo::NativeToken { denom } => denom,
             AssetInfo::Token { contract_addr: _ } => {
-                return Err(ContractError::PDEXNotNativeCoin {});
+                return Err(ContractError::PADEXNotNativeCoin {});
             }
         };
         messages.push(SubMsg::new(CosmosMsg::Custom(PalomaMsg::TokenFactoryMsg {
             create_denom: None,
             mint_tokens: Some(MintMsg {
-                denom: pdex,
+                denom: padex,
                 amount: protocol_reward_amount,
                 mint_to_address: user.to_string(),
             }),
@@ -130,7 +130,7 @@ pub fn deactivate_pool(
             let (_, alloc_points) = active_pools.swap_remove(ind);
 
             pool_info.update_rewards(deps.storage, &env, &lp_token_asset)?;
-            pool_info.disable_pdex_rewards();
+            pool_info.disable_padex_rewards();
             pool_info.save(deps.storage, &lp_token_asset)?;
 
             config.total_alloc_points = config.total_alloc_points.checked_sub(alloc_points)?;
@@ -138,7 +138,7 @@ pub fn deactivate_pool(
             for (lp_asset, alloc_points) in &active_pools {
                 let mut pool_info = PoolInfo::load(deps.storage, lp_asset)?;
                 pool_info.update_rewards(deps.storage, &env, lp_asset)?;
-                pool_info.set_pdex_rewards(&config, *alloc_points);
+                pool_info.set_padex_rewards(&config, *alloc_points);
                 pool_info.save(deps.storage, lp_asset)?;
             }
 
@@ -177,7 +177,7 @@ pub fn deactivate_blocked_pools(
         // check if pair type is blocked
         if blocked_pair_types.contains(&pair_info.pair_type) {
             pool_info.update_rewards(deps.storage, &env, lp_token_asset)?;
-            pool_info.disable_pdex_rewards();
+            pool_info.disable_padex_rewards();
             pool_info.save(deps.storage, lp_token_asset)?;
 
             config.total_alloc_points = config.total_alloc_points.checked_sub(*alloc_points)?;
@@ -197,7 +197,7 @@ pub fn deactivate_blocked_pools(
         for (lp_asset, alloc_points) in &active_pools {
             let mut pool_info = PoolInfo::load(deps.storage, lp_asset)?;
             pool_info.update_rewards(deps.storage, &env, lp_asset)?;
-            pool_info.set_pdex_rewards(&config, *alloc_points);
+            pool_info.set_padex_rewards(&config, *alloc_points);
             pool_info.save(deps.storage, lp_asset)?;
         }
 

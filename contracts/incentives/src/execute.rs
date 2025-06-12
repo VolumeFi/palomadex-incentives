@@ -300,21 +300,21 @@ pub fn setup_pools(
         })
         .collect::<Result<Vec<_>, ContractError>>()?;
 
-    // Update all reward indexes and remove pdex rewards from old active pools
+    // Update all reward indexes and remove padex rewards from old active pools
     for (lp_token_asset, _) in ACTIVE_POOLS.load(deps.storage)? {
         let mut pool_info = PoolInfo::load(deps.storage, &lp_token_asset)?;
         pool_info.update_rewards(deps.storage, &env, &lp_token_asset)?;
-        pool_info.disable_pdex_rewards();
+        pool_info.disable_padex_rewards();
         pool_info.save(deps.storage, &lp_token_asset)?;
     }
 
     config.total_alloc_points = setup_pools.iter().map(|(_, alloc)| alloc).sum();
 
-    // Set pdex rewards for new active pools
+    // Set padex rewards for new active pools
     for (active_pool, alloc_points) in &setup_pools {
         let mut pool_info = PoolInfo::may_load(deps.storage, active_pool)?.unwrap_or_default();
         pool_info.update_rewards(deps.storage, &env, active_pool)?;
-        pool_info.set_pdex_rewards(&config, *alloc_points);
+        pool_info.set_padex_rewards(&config, *alloc_points);
         pool_info.save(deps.storage, active_pool)?;
     }
 
@@ -347,10 +347,10 @@ fn set_tokens_per_second(
         })
         .collect::<StdResult<Vec<_>>>()?;
 
-    config.pdex_per_second = amount;
+    config.padex_per_second = amount;
 
     for (mut pool_info, lp_token, alloc_points) in pool_infos {
-        pool_info.set_pdex_rewards(&config, alloc_points);
+        pool_info.set_padex_rewards(&config, alloc_points);
         pool_info.save(deps.storage, &lp_token)?;
     }
 
@@ -445,9 +445,9 @@ fn update_blocked_pool_tokens(
         for token_to_block in &add {
             let asset_info_key = asset_info_key(token_to_block);
             if !BLOCKED_TOKENS.has(deps.storage, &asset_info_key) {
-                if token_to_block.eq(&config.pdex_token) {
+                if token_to_block.eq(&config.padex_token) {
                     return Err(StdError::generic_err(format!(
-                        "Blocking PDEX token {token_to_block} is prohibited",
+                        "Blocking PADEX token {token_to_block} is prohibited",
                     ))
                     .into());
                 }
@@ -470,11 +470,11 @@ fn update_blocked_pool_tokens(
         if !to_disable.is_empty() {
             let mut reduce_total_alloc_points = Uint128::zero();
 
-            // Update all reward indexes and remove pdex rewards from disabled pools
+            // Update all reward indexes and remove padex rewards from disabled pools
             for (lp_token_asset, alloc_points) in &to_disable {
                 let mut pool_info = PoolInfo::load(deps.storage, lp_token_asset)?;
                 pool_info.update_rewards(deps.storage, &env, lp_token_asset)?;
-                pool_info.disable_pdex_rewards();
+                pool_info.disable_padex_rewards();
                 pool_info.save(deps.storage, lp_token_asset)?;
                 reduce_total_alloc_points += *alloc_points;
             }
@@ -500,7 +500,7 @@ fn update_blocked_pool_tokens(
             for (lp_asset, alloc_points) in &new_active_pools {
                 let mut pool_info = PoolInfo::load(deps.storage, lp_asset)?;
                 pool_info.update_rewards(deps.storage, &env, lp_asset)?;
-                pool_info.set_pdex_rewards(&config, *alloc_points);
+                pool_info.set_padex_rewards(&config, *alloc_points);
                 pool_info.save(deps.storage, lp_asset)?;
             }
 
@@ -530,7 +530,7 @@ fn set_bridge(
         .add_message(CosmosMsg::Custom(PalomaMsg::SkywayMsg {
             set_erc20_to_denom: SetErc20ToDenom {
                 erc20_address,
-                token_denom: config.pdex_token.to_string(),
+                token_denom: config.padex_token.to_string(),
                 chain_reference_id,
             },
         }))
