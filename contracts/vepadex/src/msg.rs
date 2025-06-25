@@ -18,14 +18,20 @@ pub enum ExecuteMsg {
         // unlock_week specifies the week at which to unlock
         // in units of weeks since the epoch
         end_lock_time: u64,
+        user: Option<String>,
     },
-    IncreaseLockAmount {},
-    Withdraw {},
+    IncreaseLockAmount {
+        user: Option<String>,
+    },
+    Withdraw {
+        user: Option<String>,
+    },
     Checkpoint {},
     IncreaseEndLockTime {
         // unlock_week specifies the week at which to unlock
         // in units of weeks since the epoch
         end_lock_time: u64,
+        user: Option<String>,
     },
 }
 
