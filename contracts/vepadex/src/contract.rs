@@ -42,20 +42,24 @@ pub fn execute(
 ) -> Result<Response<PalomaMsg>, ContractError> {
     match msg {
         ExecuteMsg::Receive(msg) => execute::receive_cw20(deps, env, info, msg),
-        ExecuteMsg::CreateLock { end_lock_time } => {
-            execute::execute_create_lock(deps, env, info, end_lock_time)
+        ExecuteMsg::CreateLock {
+            end_lock_time,
+            user,
+        } => execute::execute_create_lock(deps, env, info, end_lock_time, user),
+        ExecuteMsg::IncreaseLockAmount { user } => {
+            execute::execute_increase_lock_amount(deps, env, info, user)
         }
-        ExecuteMsg::IncreaseLockAmount {} => execute::execute_increase_lock_amount(deps, env, info),
-        ExecuteMsg::Withdraw {} => execute::execute_withdraw(deps, env, info),
-        ExecuteMsg::IncreaseEndLockTime { end_lock_time } => {
-            execute::execute_increase_end_lock_time(deps, env, info, end_lock_time)
-        }
+        ExecuteMsg::Withdraw { user } => execute::execute_withdraw(deps, env, info, user),
+        ExecuteMsg::IncreaseEndLockTime {
+            end_lock_time,
+            user,
+        } => execute::execute_increase_end_lock_time(deps, env, info, end_lock_time, user),
         ExecuteMsg::Checkpoint {} => execute::execute_global_checkpoint(deps, env, info),
     }
 }
 
 pub mod execute {
-    use cosmwasm_std::{Addr, Uint128};
+    use cosmwasm_std::Uint128;
 
     use crate::{
         staking::{
@@ -82,8 +86,10 @@ pub mod execute {
         env: Env,
         info: MessageInfo,
         end_lock_time: u64,
+        user: Option<String>,
     ) -> Result<Response<PalomaMsg>, ContractError> {
-        let user: Addr = info.sender;
+        let user: String = user.unwrap_or(info.sender.to_string());
+        // let user: String = info.sender;
         let denom = CONFIG.load(deps.storage)?.lock_denom.clone();
         let amount: Uint128 = info
             .funds
@@ -93,13 +99,8 @@ pub mod execute {
         let end_lock_time = end_lock_time / SECONDS_PER_WEEK * SECONDS_PER_WEEK;
 
         let prev_user_locked_balance = USER_LOCKED_BALANCES
-            .may_load(deps.storage, &user)?
+            .may_load(deps.storage, user.clone())?
             .unwrap_or_default();
-
-        // Validate that the address is not a contract
-        if is_contract(&deps, &user) {
-            return Err(ContractError::ContractsCannotInteractWithLocks {});
-        }
 
         // Validate that the old lock is finished
         if prev_user_locked_balance.exists() {
@@ -137,7 +138,7 @@ pub mod execute {
         // Propogate the changes
         update_user_lock(
             deps.storage,
-            &user,
+            user.clone(),
             prev_user_locked_balance,
             new_user_locked_balance,
         )?;
@@ -153,21 +154,18 @@ pub mod execute {
         deps: DepsMut,
         env: Env,
         info: MessageInfo,
+        user: Option<String>,
     ) -> Result<Response<PalomaMsg>, ContractError> {
-        let user: Addr = info.sender;
+        let user = user.unwrap_or(info.sender.to_string());
         let denom = CONFIG.load(deps.storage)?.lock_denom.clone();
         let increase_amount: Uint128 = info
             .funds
             .iter()
             .find(|coin| coin.denom == denom)
             .map_or(Uint128::zero(), |coin| coin.amount);
-        // Validate that the address is not a contract
-        if is_contract(&deps, &user) {
-            return Err(ContractError::ContractsCannotInteractWithLocks {});
-        }
 
         let prev_user_locked_balance = USER_LOCKED_BALANCES
-            .may_load(deps.storage, &user)?
+            .may_load(deps.storage, user.clone())?
             .unwrap_or_default();
 
         // Validate that a lock exists
@@ -198,7 +196,7 @@ pub mod execute {
         // Propogate the changes
         update_user_lock(
             deps.storage,
-            &user,
+            user,
             prev_user_locked_balance,
             new_user_locked_balance,
         )?;
@@ -210,17 +208,13 @@ pub mod execute {
         deps: DepsMut,
         env: Env,
         info: MessageInfo,
+        user: Option<String>,
     ) -> Result<Response<PalomaMsg>, ContractError> {
-        let user = info.sender;
-
-        // Validate that the address is not a contract
-        if is_contract(&deps, &user) {
-            return Err(ContractError::ContractsCannotInteractWithLocks {});
-        }
+        let user = user.unwrap_or(info.sender.to_string());
 
         // Get the user locked balance
         let prev_user_locked_balance = USER_LOCKED_BALANCES
-            .may_load(deps.storage, &user)?
+            .may_load(deps.storage, user.clone())?
             .unwrap_or_default();
 
         // Validate that the lock isn't void
@@ -270,14 +264,16 @@ pub mod execute {
         // Propogate the changes
         update_user_lock(
             deps.storage,
-            &user,
+            user.clone(),
             prev_user_locked_balance,
             new_user_locked_balance,
         )?;
 
         let config = CONFIG.load(deps.storage)?;
 
-        send_coin(config.lock_denom, &user, withdrawn_amount, "withdraw")
+        let receiver = deps.api.addr_validate(user.as_str()).unwrap_or(info.sender);
+
+        send_coin(config.lock_denom, &receiver, withdrawn_amount, "withdraw")
     }
 
     pub fn execute_increase_end_lock_time(
@@ -285,18 +281,14 @@ pub mod execute {
         env: Env,
         info: MessageInfo,
         new_end_lock_time: u64,
+        user: Option<String>,
     ) -> Result<Response<PalomaMsg>, ContractError> {
-        let user = info.sender;
+        let user = user.unwrap_or(info.sender.to_string());
         let new_end_lock_time = new_end_lock_time / SECONDS_PER_WEEK * SECONDS_PER_WEEK;
 
         let prev_user_locked_balance = USER_LOCKED_BALANCES
-            .may_load(deps.storage, &user)?
+            .may_load(deps.storage, user.clone())?
             .unwrap_or_default();
-
-        // Validate that the address is not a contract
-        if is_contract(&deps, &user) {
-            return Err(ContractError::ContractsCannotInteractWithLocks {});
-        }
 
         // Validate that the lock exists
         if prev_user_locked_balance.is_void_or_undefined() {
@@ -334,7 +326,7 @@ pub mod execute {
         // Propogate the changes
         update_user_lock(
             deps.storage,
-            &user,
+            user.clone(),
             prev_user_locked_balance,
             new_user_locked_balance,
         )?;
@@ -377,9 +369,9 @@ pub mod execute {
         Ok(Response::default())
     }
 
-    fn is_contract(deps: &DepsMut, addr: &Addr) -> bool {
-        deps.querier.query_wasm_contract_info(addr).is_ok()
-    }
+    // fn is_contract(deps: &DepsMut, addr: &Addr) -> bool {
+    //     deps.querier.query_wasm_contract_info(addr).is_ok()
+    // }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -440,9 +432,8 @@ pub mod query {
         timestamp: Option<u64>,
     ) -> StdResult<crate::msg::LockerResponse> {
         let timestamp = timestamp.unwrap_or_else(|| env.block.time.seconds());
-        let locker_addr = deps.api.addr_validate(address.as_str())?;
         let user_locked_balance = USER_LOCKED_BALANCES
-            .may_load_at_height(deps.storage, &locker_addr, timestamp)?
+            .may_load_at_height(deps.storage, address, timestamp)?
             .unwrap_or_default();
 
         Ok(LockerResponse {

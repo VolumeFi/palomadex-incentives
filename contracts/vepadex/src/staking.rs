@@ -8,7 +8,7 @@ use cosmwasm_std::{Addr, Coin, CosmosMsg, Response, StdResult, Storage, Uint128}
 
 pub fn update_user_lock(
     storage: &mut dyn Storage,
-    user: &Addr,
+    user: String,
     prev_user_locked_balance: UserLockedBalance,
     new_user_locked_balance: UserLockedBalance,
 ) -> StdResult<()> {

@@ -1,6 +1,6 @@
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
-use cosmwasm_std::{Addr, Decimal256, Fraction, Uint128, Uint256};
+use cosmwasm_std::{Decimal256, Fraction, Uint128, Uint256};
 use cw_storage_plus::{Item, Map, SnapshotItem, SnapshotMap};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -100,7 +100,7 @@ pub const STATE: SnapshotItem<State> = SnapshotItem::new(
     cw_storage_plus::Strategy::EveryBlock,
 );
 
-pub const USER_LOCKED_BALANCES: SnapshotMap<&Addr, UserLockedBalance> = SnapshotMap::new(
+pub const USER_LOCKED_BALANCES: SnapshotMap<String, UserLockedBalance> = SnapshotMap::new(
     "user_locked_balance",
     "user_locked_balance__checkpoint",
     "user_locked_balance__changelog",
