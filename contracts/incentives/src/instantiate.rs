@@ -38,6 +38,7 @@ pub fn instantiate(
         deps.storage,
         &Config {
             owner: deps.api.addr_validate(&msg.owner)?,
+            trader: deps.api.addr_validate(&msg.trader)?,
             factory: deps.api.addr_validate(&msg.factory)?,
             generator_controller: None,
             padex_token: padex_token.clone(),

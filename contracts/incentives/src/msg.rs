@@ -23,6 +23,7 @@ pub enum ExecuteMsg {
     ClaimRewards {
         /// The LP token cw20 address or token factory denom
         lp_tokens: Vec<String>,
+        user: Option<String>,
     },
     /// Receives a message of type [`Cw20ReceiveMsg`]. Handles cw20 LP token deposits.
     Receive(Cw20ReceiveMsg),
@@ -35,6 +36,7 @@ pub enum ExecuteMsg {
         lp_token: String,
         /// The amount to withdraw. Must not exceed total staked amount.
         amount: Uint128,
+        user: Option<String>,
     },
     /// Set a new amount of PADEX to distribute per seconds.
     /// Only the owner can execute this.
@@ -127,6 +129,7 @@ pub enum ExecuteMsg {
 #[cw_serde]
 pub struct InstantiateMsg {
     pub owner: String,
+    pub trader: String,
     pub factory: String,
     pub incentivization_fee_info: Option<IncentivizationFeeInfo>,
     pub padex_name: String,

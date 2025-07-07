@@ -27,7 +27,8 @@ use crate::types::{
 pub fn claim_rewards(
     storage: &dyn Storage,
     env: Env,
-    user: &Addr,
+    sender: Addr,
+    user: &String,
     pool_tuples: Vec<(&AssetInfo, &mut PoolInfo, &mut UserInfo)>,
 ) -> Result<Response<PalomaMsg>, ContractError> {
     let mut attrs = vec![attr("action", "claim_rewards"), attr("user", user)];
@@ -73,8 +74,10 @@ pub fn claim_rewards(
         .into_iter()
         .map(|(info, assets)| {
             let amount: Uint128 = assets.into_iter().map(|asset| asset.amount).sum();
-            info.with_balance(amount)
-                .into_submsg(user, Some((ReplyOn::Error, POST_TRANSFER_REPLY_ID)))
+            info.with_balance(amount).into_submsg(
+                sender.to_string(),
+                Some((ReplyOn::Error, POST_TRANSFER_REPLY_ID)),
+            )
         })
         .collect::<StdResult<Vec<_>>>()?;
 
@@ -93,7 +96,7 @@ pub fn claim_rewards(
             mint_tokens: Some(MintMsg {
                 denom: padex,
                 amount: protocol_reward_amount,
-                mint_to_address: user.to_string(),
+                mint_to_address: sender.to_string(),
             }),
         })))
     }
