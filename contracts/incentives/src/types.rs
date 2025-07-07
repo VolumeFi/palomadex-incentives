@@ -149,6 +149,8 @@ impl Hash for RewardType {
 pub struct Config {
     /// Address allowed to change contract parameters
     pub owner: Addr,
+    /// Trader contract
+    pub trader: Addr,
     /// The Factory address
     pub factory: Addr,
     /// Contract address which can only set active generators and their alloc points

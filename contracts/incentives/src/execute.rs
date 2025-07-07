@@ -9,9 +9,7 @@ use cosmwasm_std::{
 use cw_utils::one_coin;
 use itertools::Itertools;
 
-use crate::asset::{
-    addr_opt_validate, determine_asset_info, validate_native_denom, Asset, AssetInfo, AssetInfoExt,
-};
+use crate::asset::{determine_asset_info, validate_native_denom, Asset, AssetInfo, AssetInfoExt};
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, FactoryQueryMsg};
 use crate::state::{
@@ -33,12 +31,22 @@ pub fn execute(
 ) -> Result<Response<PalomaMsg>, ContractError> {
     match msg {
         ExecuteMsg::SetupPools { pools } => setup_pools(deps, env, info, pools),
-        ExecuteMsg::ClaimRewards { lp_tokens } => {
+        ExecuteMsg::ClaimRewards { lp_tokens, user } => {
             // Check for duplicated pools
             ensure!(
                 lp_tokens.iter().all_unique(),
                 ContractError::DuplicatedPoolFound {}
             );
+
+            let user = if user.is_some() {
+                assert!(
+                    info.sender == CONFIG.load(deps.storage)?.trader,
+                    "User address must match sender address"
+                );
+                user.unwrap()
+            } else {
+                info.sender.to_string()
+            };
 
             // Collect in-memory mutable objects
             let mut tuples = lp_tokens
@@ -46,7 +54,7 @@ pub fn execute(
                 .map(|lp_token| {
                     let lp_asset = determine_asset_info(&lp_token, deps.api)?;
                     let pool_info = PoolInfo::load(deps.storage, &lp_asset)?;
-                    let user_pos = UserInfo::load_position(deps.storage, &info.sender, &lp_asset)?;
+                    let user_pos = UserInfo::load_position(deps.storage, &user, &lp_asset)?;
                     Ok((lp_asset, pool_info, user_pos))
                 })
                 .collect::<Result<Vec<_>, ContractError>>()?;
@@ -58,12 +66,12 @@ pub fn execute(
                 .collect_vec();
 
             // Compose response. Return early in case of error
-            let response = claim_rewards(deps.storage, env, &info.sender, mut_tuples)?;
+            let response = claim_rewards(deps.storage, env, info.sender, &user, mut_tuples)?;
 
             // Save updates in state
             for (lp_asset, pool_info, user_pos) in tuples {
                 pool_info.save(deps.storage, &lp_asset)?;
-                user_pos.save(deps.storage, &info.sender, &lp_asset)?;
+                user_pos.save(deps.storage, &user, &lp_asset)?;
             }
 
             Ok(response)
@@ -89,7 +97,11 @@ pub fn execute(
 
             deposit(deps, env, maybe_lp, info.sender, recipient)
         }
-        ExecuteMsg::Withdraw { lp_token, amount } => withdraw(deps, env, info, lp_token, amount),
+        ExecuteMsg::Withdraw {
+            lp_token,
+            amount,
+            user,
+        } => withdraw(deps, env, info, lp_token, amount, user),
         ExecuteMsg::SetTokensPerSecond { amount } => set_tokens_per_second(deps, env, info, amount),
         ExecuteMsg::Incentivize { lp_token, schedule } => {
             incentivize(deps, info, env, lp_token, schedule)
@@ -165,7 +177,15 @@ fn deposit(
     sender: Addr,
     recipient: Option<String>,
 ) -> Result<Response<PalomaMsg>, ContractError> {
-    let staker = addr_opt_validate(deps.api, &recipient)?.unwrap_or(sender);
+    let staker = if recipient.is_some() {
+        assert!(
+            sender == CONFIG.load(deps.storage)?.trader,
+            "User address must match sender address"
+        );
+        recipient.unwrap()
+    } else {
+        sender.to_string()
+    };
 
     let pair_info = query_pair_info(deps.as_ref(), &maybe_lp.info)?;
     let config = CONFIG.load(deps.storage)?;
@@ -183,6 +203,7 @@ fn deposit(
     let response = claim_rewards(
         deps.storage,
         env,
+        sender,
         &staker,
         vec![(&maybe_lp.info, &mut pool_info, &mut user_info)],
     )?;
@@ -205,10 +226,20 @@ fn withdraw(
     info: MessageInfo,
     lp_token: String,
     amount: Uint128,
+    user: Option<String>,
 ) -> Result<Response<PalomaMsg>, ContractError> {
     let lp_token_asset = determine_asset_info(&lp_token, deps.api)?;
+    let user = if user.is_some() {
+        assert!(
+            info.sender == CONFIG.load(deps.storage)?.trader,
+            "User address must match sender address"
+        );
+        user.unwrap()
+    } else {
+        info.sender.to_string()
+    };
 
-    let mut user_info = UserInfo::load_position(deps.storage, &info.sender, &lp_token_asset)?;
+    let mut user_info = UserInfo::load_position(deps.storage, &user, &lp_token_asset)?;
 
     if user_info.amount < amount {
         Err(ContractError::AmountExceedsBalance {
@@ -221,7 +252,8 @@ fn withdraw(
         let response = claim_rewards(
             deps.storage,
             env,
-            &info.sender,
+            info.sender.clone(),
+            &user,
             vec![(&lp_token_asset, &mut pool_info, &mut user_info)],
         )?;
 
@@ -229,9 +261,9 @@ fn withdraw(
         pool_info.save(deps.storage, &lp_token_asset)?;
         if user_info.amount.is_zero() {
             // If user has withdrawn all LP tokens, we can remove his position
-            user_info.remove(deps.storage, &info.sender, &lp_token_asset);
+            user_info.remove(deps.storage, &user, &lp_token_asset);
         } else {
-            user_info.save(deps.storage, &info.sender, &lp_token_asset)?;
+            user_info.save(deps.storage, &user, &lp_token_asset)?;
         }
 
         let transfer_msg = lp_token_asset.with_balance(amount).into_msg(info.sender)?;

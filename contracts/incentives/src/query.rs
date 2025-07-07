@@ -23,8 +23,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> Result<Binary, ContractErro
         QueryMsg::Config {} => Ok(to_json_binary(&CONFIG.load(deps.storage)?)?),
         QueryMsg::Deposit { lp_token, user } => {
             let lp_asset = determine_asset_info(&lp_token, deps.api)?;
-            let user_addr = deps.api.addr_validate(&user)?;
-            let amount = UserInfo::may_load_position(deps.storage, &user_addr, &lp_asset)?
+            let amount = UserInfo::may_load_position(deps.storage, &user, &lp_asset)?
                 .map(|maybe_pos| maybe_pos.amount)
                 .unwrap_or_default();
             Ok(to_json_binary(&amount)?)
@@ -53,9 +52,6 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> Result<Binary, ContractErro
             limit,
         } => {
             let lp_asset = determine_asset_info(&lp_token, deps.api)?;
-            let start_after = start_after
-                .map(|addr| deps.api.addr_validate(&addr))
-                .transpose()?;
             let stakers = list_pool_stakers(deps.storage, &lp_asset, start_after, limit)?;
             Ok(to_json_binary(&stakers)?)
         }
@@ -160,12 +156,11 @@ pub fn query_pending_rewards(
     lp_token: String,
 ) -> Result<Vec<Asset>, ContractError> {
     let lp_asset = determine_asset_info(&lp_token, deps.api)?;
-    let user_addr = deps.api.addr_validate(&user)?;
 
     let mut pool_info = PoolInfo::load(deps.storage, &lp_asset)?;
     pool_info.update_rewards(deps.storage, &env, &lp_asset)?;
 
-    let mut pos = UserInfo::load_position(deps.storage, &user_addr, &lp_asset)?;
+    let mut pos = UserInfo::load_position(deps.storage, &user, &lp_asset)?;
 
     let mut outstanding_rewards =
         pos.claim_finished_rewards(deps.storage, &lp_asset, &pool_info)?;

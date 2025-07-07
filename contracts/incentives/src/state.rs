@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Decimal256, Env, Order, StdError, StdResult, Storage, Uint128, Uint256};
+use cosmwasm_std::{Decimal256, Env, Order, StdError, StdResult, Storage, Uint128, Uint256};
 use cw_storage_plus::{Bound, Item, Map};
 use itertools::Itertools;
 
@@ -33,7 +33,7 @@ pub const FINISHED_REWARD_INDEXES: Map<(&AssetInfo, u64), Vec<(AssetInfo, Decima
 /// key: lp_token (either cw20 or native), value: pool info
 pub const POOLS: Map<&AssetInfo, PoolInfo> = Map::new("pools");
 /// key: (lp_token, user_addr), value: user info
-pub const USER_INFO: Map<(&AssetInfo, &Addr), UserInfo> = Map::new("user_info");
+pub const USER_INFO: Map<(&AssetInfo, &String), UserInfo> = Map::new("user_info");
 /// key: (LP token asset, reward token asset, schedule end point), value: reward per second
 pub const EXTERNAL_REWARD_SCHEDULES: Map<(&AssetInfo, &AssetInfo, u64), Decimal256> =
     Map::new("reward_schedules");
@@ -487,9 +487,9 @@ impl PoolInfo {
 pub fn list_pool_stakers(
     storage: &dyn Storage,
     lp_token: &AssetInfo,
-    start_after: Option<Addr>,
+    start_after: Option<String>,
     limit: Option<u8>,
-) -> StdResult<Vec<(Addr, Uint128)>> {
+) -> StdResult<Vec<(String, Uint128)>> {
     let start = start_after.as_ref().map(Bound::exclusive);
     let limit = limit.unwrap_or(MAX_PAGE_LIMIT).max(MAX_PAGE_LIMIT);
     USER_INFO
@@ -533,7 +533,7 @@ impl UserInfo {
     /// Can be used in context where position must exist.
     pub fn load_position(
         storage: &dyn Storage,
-        user: &Addr,
+        user: &String,
         lp_token: &AssetInfo,
     ) -> Result<Self, ContractError> {
         Self::may_load_position(storage, user, lp_token)?.ok_or_else(|| {
@@ -548,7 +548,7 @@ impl UserInfo {
     /// Can be used in context where position may or may not exist. For example, in deposit context.
     pub fn may_load_position(
         storage: &dyn Storage,
-        user: &Addr,
+        user: &String,
         lp_token: &AssetInfo,
     ) -> StdResult<Option<Self>> {
         USER_INFO.may_load(storage, (lp_token, user))
@@ -697,14 +697,14 @@ impl UserInfo {
     pub fn save(
         self,
         storage: &mut dyn Storage,
-        user: &Addr,
+        user: &String,
         lp_token: &AssetInfo,
     ) -> StdResult<()> {
         USER_INFO.save(storage, (lp_token, user), &self)
     }
 
     /// Remove user position from state.
-    pub fn remove(self, storage: &mut dyn Storage, user: &Addr, lp_token: &AssetInfo) {
+    pub fn remove(self, storage: &mut dyn Storage, user: &String, lp_token: &AssetInfo) {
         USER_INFO.remove(storage, (lp_token, user))
     }
 }
